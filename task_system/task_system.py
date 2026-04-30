@@ -98,38 +98,162 @@ class GameLearningSystem:
     
     def init_default_tasks(self):
         """初始化默认任务（以Python学习为例）"""
-        # 主线任务
-        main_tasks = [
-            ("main_1", "Python基础语法", "学习变量、数据类型、控制流", 10, 100, []),
-            ("main_2", "函数与模块", "学习函数定义、模块导入", 8, 150, ["main_1"]),
-            ("main_3", "面向对象编程", "学习类、继承、多态", 12, 200, ["main_2"]),
-            ("main_4", "文件与异常处理", "学习文件读写、异常捕获", 6, 120, ["main_3"]),
-            ("main_5", "数据结构与算法", "学习列表、字典、集合、基础算法", 20, 300, ["main_3"]),
-            ("main_6", "Web开发入门", "学习Flask/Django基础", 25, 400, ["main_5"]),
-        ]
+        # 主线任务 - 使用明确参数传递
+        main_task_1 = LearningTask(
+            task_id="main_1",
+            name="Python基础语法",
+            task_type=TaskType.MAIN,
+            description="学习变量、数据类型、控制流",
+            estimated_time=10,
+            xp_reward=100,
+            prerequisites=[]
+        )
+        self.add_task(main_task_1)
+        
+        main_task_2 = LearningTask(
+            task_id="main_2",
+            name="函数与模块",
+            task_type=TaskType.MAIN,
+            description="学习函数定义、模块导入",
+            estimated_time=8,
+            xp_reward=150,
+            prerequisites=["main_1"]
+        )
+        self.add_task(main_task_2)
+        
+        main_task_3 = LearningTask(
+            task_id="main_3",
+            name="面向对象编程",
+            task_type=TaskType.MAIN,
+            description="学习类、继承、多态",
+            estimated_time=12,
+            xp_reward=200,
+            prerequisites=["main_2"]
+        )
+        self.add_task(main_task_3)
+        
+        main_task_4 = LearningTask(
+            task_id="main_4",
+            name="文件与异常处理",
+            task_type=TaskType.MAIN,
+            description="学习文件读写、异常捕获",
+            estimated_time=6,
+            xp_reward=120,
+            prerequisites=["main_3"]
+        )
+        self.add_task(main_task_4)
+        
+        main_task_5 = LearningTask(
+            task_id="main_5",
+            name="数据结构与算法",
+            task_type=TaskType.MAIN,
+            description="学习列表、字典、集合、基础算法",
+            estimated_time=20,
+            xp_reward=300,
+            prerequisites=["main_3"]
+        )
+        self.add_task(main_task_5)
+        
+        main_task_6 = LearningTask(
+            task_id="main_6",
+            name="Web开发入门",
+            task_type=TaskType.MAIN,
+            description="学习Flask/Django基础",
+            estimated_time=25,
+            xp_reward=400,
+            prerequisites=["main_5"]
+        )
+        self.add_task(main_task_6)
         
         # 支线任务
-        side_tasks = [
-            ("side_1", "代码规范", "学习PEP8编码规范", 3, 50, ["main_1"]),
-            ("side_2", "Git版本控制", "学习Git基础命令", 5, 80, ["main_2"]),
-            ("side_3", "单元测试", "学习unittest/pytest", 6, 90, ["main_3"]),
-            ("side_4", "正则表达式", "学习正则表达式应用", 4, 70, ["main_2"]),
-            ("side_5", "装饰器与生成器", "学习高级Python特性", 5, 100, ["main_3"]),
-        ]
+        side_task_1 = LearningTask(
+            task_id="side_1",
+            name="代码规范",
+            task_type=TaskType.SIDE,
+            description="学习PEP8编码规范",
+            estimated_time=3,
+            xp_reward=50,
+            prerequisites=["main_1"]
+        )
+        self.add_task(side_task_1)
+        
+        side_task_2 = LearningTask(
+            task_id="side_2",
+            name="Git版本控制",
+            task_type=TaskType.SIDE,
+            description="学习Git基础命令",
+            estimated_time=5,
+            xp_reward=80,
+            prerequisites=["main_2"]
+        )
+        self.add_task(side_task_2)
+        
+        side_task_3 = LearningTask(
+            task_id="side_3",
+            name="单元测试",
+            task_type=TaskType.SIDE,
+            description="学习unittest/pytest",
+            estimated_time=6,
+            xp_reward=90,
+            prerequisites=["main_3"]
+        )
+        self.add_task(side_task_3)
+        
+        side_task_4 = LearningTask(
+            task_id="side_4",
+            name="正则表达式",
+            task_type=TaskType.SIDE,
+            description="学习正则表达式应用",
+            estimated_time=4,
+            xp_reward=70,
+            prerequisites=["main_2"]
+        )
+        self.add_task(side_task_4)
+        
+        side_task_5 = LearningTask(
+            task_id="side_5",
+            name="装饰器与生成器",
+            task_type=TaskType.SIDE,
+            description="学习高级Python特性",
+            estimated_time=5,
+            xp_reward=100,
+            prerequisites=["main_3"]
+        )
+        self.add_task(side_task_5)
         
         # 每日任务
-        daily_tasks = [
-            ("daily_1", "每日编码", "至少编写30行代码", 1, 30, []),
-            ("daily_2", "学习笔记", "整理今日学习笔记", 0.5, 20, []),
-            ("daily_3", "代码阅读", "阅读开源代码30分钟", 0.5, 25, []),
-        ]
+        daily_task_1 = LearningTask(
+            task_id="daily_1",
+            name="每日编码",
+            task_type=TaskType.DAILY,
+            description="至少编写30行代码",
+            estimated_time=1,
+            xp_reward=30,
+            prerequisites=[]
+        )
+        self.add_task(daily_task_1)
         
-        for task_info in main_tasks:
-            self.add_task(LearningTask(*task_info, TaskType.MAIN))
-        for task_info in side_tasks:
-            self.add_task(LearningTask(*task_info, TaskType.SIDE))
-        for task_info in daily_tasks:
-            self.add_task(LearningTask(*task_info, TaskType.DAILY))
+        daily_task_2 = LearningTask(
+            task_id="daily_2",
+            name="学习笔记",
+            task_type=TaskType.DAILY,
+            description="整理今日学习笔记",
+            estimated_time=0.5,
+            xp_reward=20,
+            prerequisites=[]
+        )
+        self.add_task(daily_task_2)
+        
+        daily_task_3 = LearningTask(
+            task_id="daily_3",
+            name="代码阅读",
+            task_type=TaskType.DAILY,
+            description="阅读开源代码30分钟",
+            estimated_time=0.5,
+            xp_reward=25,
+            prerequisites=[]
+        )
+        self.add_task(daily_task_3)
         
         self.save_data()
     
@@ -218,8 +342,13 @@ class GameLearningSystem:
         prerequisites = [parent_task_id] if parent_task_id else []
         
         new_task = LearningTask(
-            task_id, name, TaskType.SIDE, description,
-            estimated_time, xp_reward, prerequisites
+            task_id=task_id,
+            name=name,
+            task_type=TaskType.SIDE,
+            description=description,
+            estimated_time=estimated_time,
+            xp_reward=xp_reward,
+            prerequisites=prerequisites
         )
         self.add_task(new_task)
         return new_task
@@ -229,17 +358,18 @@ class GameLearningSystem:
         completed_count = sum(1 for t in self.tasks.values() 
                             if t.status == TaskStatus.COMPLETED)
         
+        main_completed = all(t.status == TaskStatus.COMPLETED 
+                            for t in self.tasks.values() 
+                            if t.type == TaskType.MAIN)
+        
         achievements_to_check = [
-            ("first_blood", "首战告捷", "完成第一个任务", 1, completed_count >= 1),
-            ("task_master", "任务大师", "完成10个任务", 10, completed_count >= 10),
-            ("main_story", "主线通关", "完成所有主线任务", 
-             sum(1 for t in self.tasks.values() if t.type == TaskType.MAIN),
-             all(t.status == TaskStatus.COMPLETED for t in self.tasks.values() 
-                 if t.type == TaskType.MAIN)),
+            ("first_blood", "首战告捷", "完成第一个任务", completed_count >= 1),
+            ("task_master", "任务大师", "完成10个任务", completed_count >= 10),
+            ("main_story", "主线通关", "完成所有主线任务", main_completed),
         ]
         
         new_achievements = []
-        for ach_id, ach_name, ach_desc, req, achieved in achievements_to_check:
+        for ach_id, ach_name, ach_desc, achieved in achievements_to_check:
             if achieved and ach_id not in [a["id"] for a in self.achievements]:
                 new_achievements.append({
                     "id": ach_id,
