@@ -1,280 +1,458 @@
 import streamlit as st
-import pandas as pd
-import plotly.express as px
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 from datetime import datetime, timedelta
-from data_manager import LearningDataManager
+import pandas as pd
+from task_system import GameLearningSystem, TaskType, TaskStatus
 
 # 页面配置
 st.set_page_config(
-    page_title="学习进度追踪器",
-    page_icon="📚",
+    page_title="游戏化学习任务系统",
+    page_icon="🎮",
     layout="wide"
 )
 
-# 初始化数据管理器
+# 初始化系统
 @st.cache_resource
-def init_manager():
-    return LearningDataManager()
+def init_system():
+    return GameLearningSystem()
 
-manager = init_manager()
+system = init_system()
 
 # 自定义CSS样式
 st.markdown("""
 <style>
     .stProgress > div > div > div > div {
-        background-color: #4ECDC4;
+        background-color: linear-gradient(90deg, #FF6B6B, #4ECDC4);
     }
-    .big-font {
-        font-size:30px !important;
-        font-weight: bold;
-    }
-    .metric-card {
-        background-color: #f0f2f6;
-        padding: 20px;
+    .task-card {
+        background-color: #f8f9fa;
+        padding: 15px;
         border-radius: 10px;
+        margin-bottom: 10px;
+        border-left: 4px solid;
+    }
+    .main-task {
+        border-left-color: #FF6B6B;
+    }
+    .side-task {
+        border-left-color: #4ECDC4;
+    }
+    .daily-task {
+        border-left-color: #FFEAA7;
+    }
+    .achievement-badge {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 10px;
+        border-radius: 8px;
         text-align: center;
+        margin: 5px;
+    }
+    .level-progress {
+        background: linear-gradient(90deg, #FF6B6B, #4ECDC4);
+    }
+    .stButton > button {
+        width: 100%;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# 侧边栏 - 添加学习记录
+# 侧边栏 - 玩家信息
 with st.sidebar:
-    st.title("📝 添加学习记录")
+    st.title("🎮 玩家信息")
     
-    # 添加新科目
-    with st.expander("➕ 添加新科目"):
-        new_subject = st.text_input("科目名称")
-        total_hours = st.number_input("总学习时长（小时）", min_value=0.0, step=0.5)
-        if st.button("添加科目"):
-            if new_subject and total_hours > 0:
-                if manager.add_subject(new_subject, total_hours):
-                    st.success(f"成功添加科目：{new_subject}")
-                    st.rerun()
-                else:
-                    st.error("科目已存在！")
+    player_data = system.get_task_tree_data()["player"]
     
-    # 添加学习记录
-    st.subheader("📖 今日学习")
-    subjects = list(manager.data["subjects"].keys())
+    # 玩家等级和经验条
+    col1, col2 = st.columns([1, 2])
+    with col1:
+        st.markdown(f"### Lv.{player_data['level']}")
+    with col2:
+        st.markdown(f"**XP**: {player_data['xp']}/{player_data['next_level_xp']}")
     
-    if subjects:
-        selected_subject = st.selectbox("选择科目", subjects)
-        hours = st.number_input("学习时长（小时）", min_value=0.0, max_value=24.0, step=0.5)
-        notes = st.text_area("学习笔记（可选）", height=80)
-        date = st.date_input("日期", datetime.now())
-        
-        if st.button("记录学习", type="primary"):
-            if selected_subject and hours > 0:
-                manager.add_learning_log(
-                    date.strftime("%Y-%m-%d"),
-                    selected_subject,
-                    hours,
-                    notes
-                )
-                st.success("✅ 学习记录已保存！")
-                st.rerun()
+    xp_progress = player_data['xp'] / player_data['next_level_xp']
+    st.progress(xp_progress)
+    
+    st.markdown("---")
+    
+    # 成就展示
+    st.subheader("🏆 已获得成就")
+    if player_data['achievements']:
+        for ach in player_data['achievements']:
+            with st.container():
+                st.markdown(f"""
+                <div class="achievement-badge">
+                    🎖️ **{ach['name']}**<br>
+                    <small>{ach['description']}</small>
+                </div>
+                """, unsafe_allow_html=True)
     else:
-        st.info("请先在左侧添加学习科目")
+        st.info("完成更多任务来获得成就吧！")
     
-    # 设置目标
-    with st.expander("🎯 设置学习目标"):
-        if subjects:
-            goal_subject = st.selectbox("选择科目", subjects, key="goal_select")
-            goal_hours = st.number_input("目标时长（小时）", min_value=0.0, step=1.0)
-            deadline = st.date_input("截止日期")
-            if st.button("设置目标"):
-                manager.set_goal(goal_subject, goal_hours, deadline.strftime("%Y-%m-%d"))
-                st.success("目标已设置！")
-        else:
-            st.info("请先添加科目")
+    st.markdown("---")
+    
+    # 创建自定义支线任务
+    st.subheader("✨ 创建自定义任务")
+    with st.form("custom_task"):
+        task_name = st.text_input("任务名称")
+        task_desc = st.text_area("任务描述")
+        est_time = st.number_input("预计时间（小时）", min_value=0.5, step=0.5)
+        xp_reward = st.number_input("经验奖励", min_value=10, step=10)
+        parent_task = st.selectbox(
+            "关联主线任务（可选）",
+            ["无"] + [t.name for t in system.tasks.values() 
+                     if t.type == TaskType.MAIN and t.status != TaskStatus.COMPLETED]
+        )
+        
+        if st.form_submit_button("创建任务"):
+            parent_id = None
+            if parent_task != "无":
+                for t in system.tasks.values():
+                    if t.name == parent_task:
+                        parent_id = t.id
+                        break
+            
+            new_task = system.create_side_task(
+                task_name, task_desc, est_time, xp_reward, parent_id
+            )
+            st.success(f"✅ 支线任务「{task_name}」已创建！")
+            st.rerun()
 
 # 主页面
-st.title("📊 学习进度可视化仪表板")
+st.title("🎯 游戏化学习任务系统")
 
-# 顶部概览指标
+# 统计卡片
 col1, col2, col3, col4 = st.columns(4)
 
-# 计算总学习时长
-total_study_hours = sum(log["hours"] for log in manager.data["daily_logs"])
-total_subjects = len(manager.data["subjects"])
-completed_subjects = sum(1 for data in manager.data["subjects"].values() 
-                        if data["completed_hours"] >= data["total_hours"])
+tasks_data = system.get_task_tree_data()
+main_tasks = tasks_data["main"]
+side_tasks = tasks_data["side"]
+daily_tasks = tasks_data["daily"]
+
+completed_main = sum(1 for t in main_tasks if t["status"] == "completed")
+completed_side = sum(1 for t in side_tasks if t["status"] == "completed")
+in_progress = sum(1 for t in system.tasks.values() 
+                 if t.status == TaskStatus.IN_PROGRESS)
 
 with col1:
-    st.markdown(f"""
-    <div class="metric-card">
-        <h3>📚 总学习时长</h3>
-        <p class="big-font">{total_study_hours:.1f} 小时</p>
-    </div>
-    """, unsafe_allow_html=True)
-
+    st.metric("📖 主线进度", f"{completed_main}/{len(main_tasks)}")
 with col2:
-    st.markdown(f"""
-    <div class="metric-card">
-        <h3>📖 学习科目</h3>
-        <p class="big-font">{total_subjects}</p>
-    </div>
-    """, unsafe_allow_html=True)
-
+    st.metric("🔀 支线完成", f"{completed_side}/{len(side_tasks)}")
 with col3:
-    st.markdown(f"""
-    <div class="metric-card">
-        <h3>✅ 已完成科目</h3>
-        <p class="big-font">{completed_subjects}/{total_subjects}</p>
-    </div>
-    """, unsafe_allow_html=True)
-
+    st.metric("⚡ 进行中任务", in_progress)
 with col4:
-    # 平均每日学习时长
-    days_with_logs = len(set(log["date"] for log in manager.data["daily_logs"]))
-    avg_daily = total_study_hours / days_with_logs if days_with_logs > 0 else 0
-    st.markdown(f"""
-    <div class="metric-card">
-        <h3>📅 日均学习</h3>
-        <p class="big-font">{avg_daily:.1f} 小时/天</p>
-    </div>
-    """, unsafe_allow_html=True)
+    total_hours = sum(t.actual_time for t in system.tasks.values())
+    st.metric("⏰ 总学习时长", f"{total_hours:.1f}小时")
 
 st.markdown("---")
 
-# 两列布局
+# 任务树可视化（主线）
+st.subheader("🌳 主线任务树")
+
+# 创建任务树的可视化
+def create_task_tree(main_tasks):
+    """创建任务树的可视化图表"""
+    fig = go.Figure()
+    
+    # 布局位置
+    levels = {}
+    for task in main_tasks:
+        # 根据任务ID确定层级
+        if "main_1" in task["id"]:
+            y_pos = 0
+        elif "main_2" in task["id"]:
+            y_pos = -1
+        elif "main_3" in task["id"]:
+            y_pos = -2
+        elif "main_4" in task["id"]:
+            y_pos = -3
+        elif "main_5" in task["id"]:
+            y_pos = -4
+        else:
+            y_pos = -5
+        
+        # 状态颜色
+        if task["status"] == "completed":
+            color = "#00FF00"
+            symbol = "star"
+            size = 30
+        elif task["status"] == "in_progress":
+            color = "#FFA500"
+            symbol = "circle"
+            size = 25
+        elif task["status"] == "available":
+            color = "#4ECDC4"
+            symbol = "circle"
+            size = 20
+        else:
+            color = "#808080"
+            symbol = "circle"
+            size = 15
+        
+        fig.add_trace(go.Scatter(
+            x=[task["id"]],
+            y=[y_pos],
+            mode='markers+text',
+            name=task["name"],
+            marker=dict(
+                size=size,
+                color=color,
+                symbol=symbol,
+                line=dict(width=2, color='white')
+            ),
+            text=task["name"],
+            textposition="top center",
+            hovertext=f"{task['name']}<br>进度: {task['progress']}%<br>奖励: {task['xp_reward']}XP",
+            hoverinfo='text'
+        ))
+        
+        # 添加连接线
+        for prereq in task["prerequisites"]:
+            prereq_task = next((t for t in main_tasks if t["id"] == prereq), None)
+            if prereq_task:
+                prereq_y = - (int(prereq_task["id"].split("_")[1]) - 1)
+                current_y = - (int(task["id"].split("_")[1]) - 1)
+                fig.add_trace(go.Scatter(
+                    x=[prereq_task["id"], task["id"]],
+                    y=[prereq_y, current_y],
+                    mode='lines',
+                    line=dict(color='white', width=2),
+                    showlegend=False,
+                    hoverinfo='none'
+                ))
+    
+    fig.update_layout(
+        title="主线任务树状图",
+        xaxis=dict(
+            title="任务",
+            showgrid=False,
+            showticklabels=False
+        ),
+        yaxis=dict(
+            title="难度层级",
+            showgrid=True,
+            gridcolor='#333333'
+        ),
+        plot_bgcolor='rgba(0,0,0,0)',
+        paper_bgcolor='rgba(0,0,0,0)',
+        height=500,
+        hovermode='closest'
+    )
+    
+    return fig
+
+st.plotly_chart(create_task_tree(main_tasks), use_container_width=True)
+
+st.markdown("---")
+
+# 任务展示区域（使用选项卡）
+tab1, tab2, tab3 = st.tabs(["📖 主线任务", "🔀 支线任务", "⚡ 每日任务"])
+
+with tab1:
+    for task in main_tasks:
+        with st.container():
+            status_emoji = {
+                "completed": "✅",
+                "in_progress": "⚡",
+                "available": "🔓",
+                "locked": "🔒"
+            }.get(task["status"], "❓")
+            
+            col1, col2, col3 = st.columns([3, 1, 1])
+            
+            with col1:
+                st.markdown(f"""
+                <div class="task-card main-task">
+                    <h4>{status_emoji} {task['name']}</h4>
+                    <p>{task['description']}</p>
+                    <small>⏰ 预计: {task['estimated_time']}小时 | ✨ 奖励: {task['xp_reward']}XP</small>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            with col2:
+                if task["status"] == "in_progress":
+                    st.write(f"进度: {task['progress']}%")
+                    st.progress(task["progress"] / 100)
+            
+            with col3:
+                if task["status"] == "available":
+                    if st.button("▶️ 开始", key=f"start_{task['id']}"):
+                        system.start_task(task["id"])
+                        st.rerun()
+                elif task["status"] == "in_progress":
+                    # 更新进度
+                    progress_increment = st.number_input(
+                        "增加进度 (%)", 
+                        min_value=0, max_value=100-task["progress"],
+                        key=f"progress_{task['id']}"
+                    )
+                    time_spent = st.number_input(
+                        "学习时长 (小时)", 
+                        min_value=0.0, step=0.5,
+                        key=f"time_{task['id']}"
+                    )
+                    if st.button("📝 更新", key=f"update_{task['id']}"):
+                        system.update_task_progress(task["id"], progress_increment, time_spent)
+                        st.rerun()
+                elif task["status"] == "completed":
+                    st.success("已完成！")
+
+with tab2:
+    # 支线任务
+    for task in side_tasks:
+        with st.expander(f"🔀 {task['name']}"):
+            st.write(f"**描述**: {task['description']}")
+            st.write(f"**预计时间**: {task['estimated_time']}小时")
+            st.write(f"**经验奖励**: {task['xp_reward']}XP")
+            
+            if task["status"] == "completed":
+                st.success("✅ 已完成")
+            elif task["status"] == "available":
+                if st.button("开始任务", key=f"start_side_{task['id']}"):
+                    system.start_task(task["id"])
+                    st.rerun()
+            elif task["status"] == "in_progress":
+                st.progress(task["progress"] / 100)
+                col1, col2 = st.columns(2)
+                with col1:
+                    progress_add = st.number_input("进度增加 (%)", key=f"side_prog_{task['id']}")
+                with col2:
+                    time_add = st.number_input("学习时长 (小时)", key=f"side_time_{task['id']}")
+                if st.button("更新进度", key=f"update_side_{task['id']}"):
+                    system.update_task_progress(task["id"], progress_add, time_add)
+                    st.rerun()
+            else:
+                st.info("🔒 需要完成前置任务")
+
+with tab3:
+    # 每日任务（可以每日重置）
+    st.warning("💡 每日任务每天更新，持续完成可获得稳定经验！")
+    
+    today = datetime.now().date()
+    
+    for task in daily_tasks:
+        with st.container():
+            col1, col2, col3 = st.columns([3, 1, 1])
+            
+            with col1:
+                st.markdown(f"""
+                <div class="task-card daily-task">
+                    <b>⚡ {task['name']}</b><br>
+                    <small>{task['description']}</small>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            with col2:
+                if task["status"] == "in_progress":
+                    st.write(f"进度: {task['progress']}%")
+                    st.progress(task["progress"] / 100)
+            
+            with col3:
+                if task["status"] == "available":
+                    if st.button("今日挑战", key=f"daily_start_{task['id']}"):
+                        system.start_task(task["id"])
+                        st.rerun()
+                elif task["status"] == "in_progress":
+                    progress = st.number_input("进度", key=f"daily_prog_{task['id']}", min_value=0, max_value=100)
+                    if st.button("记录", key=f"daily_update_{task['id']}"):
+                        system.update_task_progress(task["id"], progress, 0)
+                        st.rerun()
+                elif task["status"] == "completed":
+                    st.success("今日已完成！")
+
+st.markdown("---")
+
+# 统计和数据分析
+st.subheader("📊 学习数据分析")
+
 col1, col2 = st.columns(2)
 
 with col1:
-    st.subheader("📈 各科目进度")
-    progress_data = manager.get_progress_data()
+    # 任务完成统计饼图
+    status_counts = {
+        "已完成": sum(1 for t in system.tasks.values() 
+                     if t.status == TaskStatus.COMPLETED),
+        "进行中": sum(1 for t in system.tasks.values() 
+                     if t.status == TaskStatus.IN_PROGRESS),
+        "未开始": sum(1 for t in system.tasks.values() 
+                     if t.status in [TaskStatus.LOCKED, TaskStatus.AVAILABLE])
+    }
     
-    if progress_data:
-        # 创建进度条图表
-        fig = go.Figure()
-        subjects_list = list(progress_data.keys())
-        completed = [progress_data[s]["completed"] for s in subjects_list]
-        remaining = [progress_data[s]["remaining"] for s in subjects_list]
-        
-        fig.add_trace(go.Bar(
-            name="已完成",
-            x=subjects_list,
-            y=completed,
-            marker_color="#4ECDC4"
-        ))
-        fig.add_trace(go.Bar(
-            name="剩余",
-            x=subjects_list,
-            y=remaining,
-            marker_color="#FF6B6B"
-        ))
-        
-        fig.update_layout(
-            barmode='stack',
-            title="学习进度构成",
-            xaxis_title="科目",
-            yaxis_title="学习时长（小时）",
-            height=400
-        )
-        st.plotly_chart(fig, use_container_width=True)
-        
-        # 显示百分比进度
-        for subject, data in progress_data.items():
-            st.write(f"**{subject}**")
-            st.progress(data["percentage"] / 100)
-            st.write(f"进度：{data['percentage']:.1f}% "
-                    f"({data['completed']:.1f}/{data['completed']+data['remaining']:.1f}小时)")
-    else:
-        st.info("暂无学习数据，请添加学习记录")
+    fig_pie = go.Figure(data=[go.Pie(
+        labels=list(status_counts.keys()),
+        values=list(status_counts.values()),
+        marker_colors=['#00FF00', '#FFA500', '#808080']
+    )])
+    fig_pie.update_layout(title="任务完成情况")
+    st.plotly_chart(fig_pie, use_container_width=True)
 
 with col2:
-    st.subheader("📊 学习趋势分析")
+    # 学习时间分布
+    task_times = []
+    for task in system.tasks.values():
+        if task.actual_time > 0:
+            task_times.append({
+                "任务": task.name[:20],
+                "实际用时": task.actual_time,
+                "预计用时": task.estimated_time
+            })
     
-    # 获取最近30天数据
-    daily_stats = manager.get_daily_stats(30)
-    
-    if daily_stats:
-        df = pd.DataFrame([
-            {"日期": date, "学习时长": hours}
-            for date, hours in daily_stats.items()
-        ])
-        df = df.sort_values("日期")
-        
-        # 折线图
-        fig = px.line(
-            df, 
-            x="日期", 
-            y="学习时长",
-            title="每日学习时长趋势",
-            markers=True
+    if task_times:
+        df_times = pd.DataFrame(task_times)
+        fig_bar = go.Figure()
+        fig_bar.add_trace(go.Bar(
+            name="预计用时",
+            x=df_times["任务"],
+            y=df_times["预计用时"],
+            marker_color="#4ECDC4"
+        ))
+        fig_bar.add_trace(go.Bar(
+            name="实际用时",
+            x=df_times["任务"],
+            y=df_times["实际用时"],
+            marker_color="#FF6B6B"
+        ))
+        fig_bar.update_layout(
+            title="学习时间对比",
+            barmode='group',
+            xaxis_title="任务",
+            yaxis_title="时长（小时）"
         )
-        fig.update_layout(
-            xaxis_title="日期",
-            yaxis_title="学习时长（小时）",
-            height=400
-        )
-        st.plotly_chart(fig, use_container_width=True)
-        
-        # 统计信息
-        col_a, col_b, col_c = st.columns(3)
-        with col_a:
-            st.metric("最高单日", f"{df['学习时长'].max():.1f}小时")
-        with col_b:
-            st.metric("最近7天总计", f"{df.tail(7)['学习时长'].sum():.1f}小时")
-        with col_c:
-            st.metric("平均每日", f"{df['学习时长'].mean():.1f}小时")
-    else:
-        st.info("暂无学习记录")
+        st.plotly_chart(fig_bar, use_container_width=True)
 
 st.markdown("---")
 
-# 第三行：近期学习记录和目标进度
-col3, col4 = st.columns(2)
+# 学习笔记记录
+st.subheader("📝 学习笔记")
 
-with col3:
-    st.subheader("📋 近期学习记录")
-    if manager.data["daily_logs"]:
-        # 显示最近10条记录
-        recent_logs = manager.data["daily_logs"][-10:][::-1]
-        for log in recent_logs:
-            with st.container():
-                col_date, col_subj, col_hours = st.columns([2, 2, 1])
-                with col_date:
-                    st.write(f"📅 {log['date']}")
-                with col_subj:
-                    st.write(f"📖 {log['subject']}")
-                with col_hours:
-                    st.write(f"⏰ {log['hours']}小时")
-                if log.get('notes'):
-                    st.caption(f"✏️ 笔记：{log['notes']}")
-                st.divider()
-    else:
-        st.info("暂无学习记录")
+with st.form("learning_note"):
+    note_content = st.text_area("记录今天的学习心得", height=100)
+    related_task = st.selectbox(
+        "关联任务",
+        [t.name for t in system.tasks.values() if t.status == TaskStatus.IN_PROGRESS]
+    )
+    
+    if st.form_submit_button("保存笔记"):
+        for task in system.tasks.values():
+            if task.name == related_task:
+                system.update_task_progress(task.id, 0, 0, note_content)
+                st.success("笔记已保存！")
+                break
 
-with col4:
-    st.subheader("🎯 学习目标追踪")
-    if manager.data["goals"]:
-        for subject, goal in manager.data["goals"].items():
-            if subject in manager.data["subjects"]:
-                completed = manager.data["subjects"][subject]["completed_hours"]
-                target = goal["goal_hours"]
-                progress_pct = min(100, (completed / target * 100)) if target > 0 else 0
-                
-                st.write(f"**{subject}**")
-                st.write(f"目标：{target}小时 | 截止：{goal['deadline']}")
-                st.progress(progress_pct / 100)
-                st.write(f"已学习：{completed:.1f}小时 ({progress_pct:.1f}%)")
-                
-                # 距离截止日期的提醒
-                deadline_date = datetime.strptime(goal['deadline'], "%Y-%m-%d").date()
-                days_left = (deadline_date - datetime.now().date()).days
-                if days_left > 0:
-                    st.caption(f"⏰ 还剩 {days_left} 天")
-                    daily_needed = (target - completed) / days_left if days_left > 0 else 0
-                    if daily_needed > 0:
-                        st.caption(f"📊 每天需要学习 {daily_needed:.1f} 小时")
-                else:
-                    st.warning("⚠️ 已超过截止日期！")
-                st.divider()
-    else:
-        st.info("暂无学习目标，请在侧边栏设置")
+# 最近学习动态
+st.subheader("🎯 近期学习动态")
+recent_notes = []
+for task in system.tasks.values():
+    for note in task.notes[-3:]:  # 最近3条笔记
+        recent_notes.append({
+            "任务": task.name,
+            "内容": note["content"][:100],
+            "时间": note["timestamp"][:10]
+        })
 
-# 页脚
-st.markdown("---")
-st.caption("💡 提示：持续记录学习时间，保持学习动力！")
+if recent_notes:
+    df_notes = pd.DataFrame(recent_notes)
+    st.dataframe(df_notes, use_container_width=True)
+else:
+    st.info("开始学习并记录笔记吧！")
